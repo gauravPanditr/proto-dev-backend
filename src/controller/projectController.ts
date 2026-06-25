@@ -1,19 +1,22 @@
-import {  Response} from "express";
-import util from "util";
-import  child_Process  from "child_process";
-import { randomUUID } from "crypto";
-import fs from "fs/promises"
+import {  Request, Response} from "express";
 
-export const execPromisified=util.promisify(child_Process.exec)
-export const projectController=async(res:Response)=>{
-     const projectId=randomUUID();
-         
-        console.log(projectId);
+import {getProjectTreeService, projectCreateService} from "../service/projectService";
+import { ProjectParams } from "../types/project";
 
-    await fs.mkdir(`./projects/${projectId}`);
-    await execPromisified('npm create vite@latest sandbox --template react',{
-        cwd:`./projects/${projectId}`
-    });
+
+
+
+export const createProject=async(res:Response)=>{
+    const projectId=await projectCreateService();
       return res.json({message:"Project created",data:projectId});
+
+}
+export const getProjectTree=async(req:Request<ProjectParams>,res:Response)=>{
+  const tree=await getProjectTreeService(req.params.projectId);
+  return res.status(200).json({
+    data:tree,
+    success:true,
+    message:"Successfully fetched the tree"
+  })
 
 }
