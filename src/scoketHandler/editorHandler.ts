@@ -35,11 +35,11 @@ export const handleEditorSocketEvents = (
         }
 
         try {
-            const response = await fs.writeFile(pathToFileOrFolder, "");
+            await fs.writeFile(pathToFileOrFolder, "");
             socket.emit("createFileSuccess", {
                 data: "File created successfully",
             });
-            console.log(response);
+            ;
             
         } catch(error) {
             console.log("Error creating the file", error);
@@ -66,7 +66,7 @@ export const handleEditorSocketEvents = (
     });
         socket.on("deleteFile", async ({ pathToFileOrFolder }) => {
         try {
-            const response = await fs.unlink(pathToFileOrFolder);
+            await fs.unlink(pathToFileOrFolder);
             socket.emit("deleteFileSuccess", {
                 data: "File deleted successfully",
             });
@@ -80,7 +80,7 @@ export const handleEditorSocketEvents = (
 
     socket.on("createFolder", async ({ pathToFileOrFolder}) => {
         try {
-            const response = await fs.mkdir(pathToFileOrFolder);
+            await fs.mkdir(pathToFileOrFolder);
             socket.emit("createFolderSuccess", {
                 data: "Folder created successfully",
             });

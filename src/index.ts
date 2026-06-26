@@ -4,9 +4,10 @@ dotenv.config();
 import {Server} from "socket.io"
 import { createServer } from "node:http";
 import chokidar from "chokidar"
-import cors from "cors";
+import cors from "cors"
 const app = express();
 import apiRouter from './routes/index';
+import { handleEditorSocketEvents } from "./scoketHandler/editorHandler";
 
 const PORT=process.env.PORT ||3000;
 
@@ -17,6 +18,10 @@ const io=new Server(server,{
     methods:['GET','POST']
   }
 })
+app.use(express.json());
+app.use(express.urlencoded());
+app.use(cors());
+app.use('/api', apiRouter);
 io.on('connection',()=>{
   console.log("a user connected");
   
@@ -24,9 +29,13 @@ io.on('connection',()=>{
 const editorNameSpace=io.of('/editor')
 editorNameSpace.on("connection",(socket)=>{
   console.log("editor connected");
-  let project=123;
-  if(project){
-    var watcher=chokidar.watch(`/projects/${project}`,{
+ let projectId = socket.handshake.query['projectId'];
+
+    console.log("Project id received after connection", projectId);
+ console.log(projectId);
+ 
+  if(projectId){
+    var watcher=chokidar.watch(`/projects/${projectId}`,{
       ignored:(path)=>path.includes("node_modules"),
       persistent:true,
       awaitWriteFinish:{
@@ -42,7 +51,7 @@ editorNameSpace.on("connection",(socket)=>{
       
     })
   }
-  
+  handleEditorSocketEvents(socket,editorNameSpace);
 
 
   socket.on("message",async (data)=>{
@@ -51,12 +60,18 @@ editorNameSpace.on("connection",(socket)=>{
     
   })
 })
-app.use(cors({
-    origin: "http://localhost:5173",
-    credentials: true
-}));
+const terminalNameSpace=io.of('/terminal');
+terminalNameSpace.on("connection",(socket)=>{
+  console.log("terminal connected");
+  socket.on("disconnect",()=>{
+    console.log("terminal disconnected");
+    
+  })
+  
+})
 
-app.use('/api', apiRouter);
+
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
