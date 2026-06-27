@@ -4,10 +4,12 @@ dotenv.config();
 import {Server} from "socket.io"
 import { createServer } from "node:http";
 import chokidar from "chokidar"
+
 import cors from "cors"
 const app = express();
 import apiRouter from './routes/index';
 import { handleEditorSocketEvents } from "./scoketHandler/editorHandler";
+
 
 const PORT=process.env.PORT ||3000;
 
@@ -60,18 +62,11 @@ editorNameSpace.on("connection",(socket)=>{
     
   })
 })
-const terminalNameSpace=io.of('/terminal');
-terminalNameSpace.on("connection",(socket)=>{
-  console.log("terminal connected");
-  socket.on("disconnect",()=>{
-    console.log("terminal disconnected");
-    
-  })
-  
-})
+
 
 
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
