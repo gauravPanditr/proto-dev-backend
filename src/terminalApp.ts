@@ -3,8 +3,8 @@ import cors from "cors";
 import { createServer, IncomingMessage } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 
-import { handleContainerCreate } from "./containers/handleContainerCreate.js";
-import { handleTerminalCreation } from "./containers/handleTerminalCreation.js";
+import { handleContainerCreate } from "./containers/handleContainerCreate";
+import { handleTerminalCreation } from "./containers/handleTerminalCreation";
 
 const app = express();
 const server = createServer(app);
@@ -27,39 +27,22 @@ webSocketForTerminal.on(
     async (ws: WebSocket, req: IncomingMessage) => {
         try {
             const url = req.url;
-
-            if (!url) {
-                ws.close();
-                return;
-            }
+            if (!url) { ws.close(); return; }
 
             const isTerminal = url.includes("/terminal");
-
-            if (!isTerminal) {
-                ws.close();
-                return;
-            }
+            if (!isTerminal) { ws.close(); return; }
 
             const projectId = url.split("=")[1];
+            if (!projectId) { ws.close(); return; }
 
-            if (!projectId) {
-                ws.close();
-                return;
-            }
+            console.log("Project id received after connection", projectId);
 
-            console.log(
-                "Project id received after connection",
-                projectId
-            );
+            const result = await handleContainerCreate(projectId);
+            if (!result) { ws.close(); return; }
 
-            const container = await handleContainerCreate(
-                projectId
-            );
+            const { container, port } = result;
 
-            if (!container) {
-                ws.close();
-                return;
-            }
+            ws.send(JSON.stringify({ event: "getPortSuccess", port }));
 
             handleTerminalCreation(container, ws);
         } catch (error) {

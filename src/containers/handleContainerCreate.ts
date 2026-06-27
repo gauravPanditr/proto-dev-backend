@@ -18,7 +18,7 @@ export const listContainer = async (): Promise<void> => {
 
 export const handleContainerCreate = async (
     projectId: string
-): Promise<Docker.Container | undefined> => {
+): Promise<{ container: Docker.Container; port: string } | undefined> => {
     console.log(
         "Project id received for container create:",
         projectId
@@ -89,11 +89,26 @@ export const handleContainerCreate = async (
 
         console.log("Container created:", container.id);
 
-        await container.start();
+       await container.start();
+    console.log("Container started");
 
-        console.log("Container started");
+    // ✅ Inspect AFTER start to get the real port
+    const info = await container.inspect();
+    const portInfo = info.NetworkSettings?.Ports?.["5173/tcp"];
 
-        return container;
+    if (!portInfo || portInfo.length === 0) {
+        console.error("Port binding not found after start");
+        return undefined;
+    }
+
+    const port = portInfo[0]?.HostPort;
+    
+    console.log("Container port:", port);
+if (!port) {
+    console.error("Host port is undefined");
+    return undefined;
+}
+    return { container, port }; 
     } catch (error) {
         console.error(
             "Error while creating container:",

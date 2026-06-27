@@ -31,25 +31,17 @@ export const handleTerminalCreation = (
                         return;
                     }
 
-                    // Step 1: Stream processing
                     processStreamOutput(stream as Duplex, ws);
 
-                    // Step 2: Stream writing
                     ws.on("message", (data: WebSocket.RawData) => {
                         const message = data.toString();
 
-                        if (message === "getPort") {
-                            container.inspect((err, info) => {
-                                if (err) {
-                                    console.error(err);
-                                    return;
-                                }
-
-                                const ports = info?.NetworkSettings;
-                                console.log(ports);
-                            });
-
-                            return;
+                      
+                        try {
+                            const parsed = JSON.parse(message);
+                            if (parsed.event) return;
+                        } catch {
+                           
                         }
 
                         stream.write(data);
@@ -101,9 +93,7 @@ function processStreamOutput(
 
     function bufferSlicer(end: number): Buffer {
         const output = buffer.slice(0, end);
-
         buffer = buffer.slice(end);
-
         return output;
     }
 
