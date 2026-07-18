@@ -70,7 +70,11 @@ export const handleContainerCreate = async (
                 "5173/tcp": {},
             },
 
-            Env: ["HOST=0.0.0.0"],
+            Env: [
+    "HOST=0.0.0.0",
+    "CHOKIDAR_USEPOLLING=true",
+    "CHOKIDAR_INTERVAL=500",
+],
 
             HostConfig: {
                 Binds: [
