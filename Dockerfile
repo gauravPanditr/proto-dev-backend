@@ -1,21 +1,15 @@
-FROM ubuntu:20.04
-# Setup user
-RUN useradd -ms /bin/bash sandbox 
+FROM node:22-alpine
 
-# Setup working directory
-WORKDIR /home/sandbox
+WORKDIR /app
 
-# update the ubuntu machine
-RUN apt update && apt upgrade -y
+COPY package*.json ./
 
-# Install nano and curl
-RUN apt install nano curl -y 
+RUN npm ci
 
-# Install nodejs
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
+COPY . .
 
-# configuring terminal to display current working directory
-RUN echo "PS1='\w '" >> /home/sandbox/.bashrc
+RUN npm run build
 
-# Setup final working directory
-WORKDIR /home/sandbox/app
+EXPOSE 8080
+
+CMD ["npm", "start"]

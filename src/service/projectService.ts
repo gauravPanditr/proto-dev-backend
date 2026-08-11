@@ -8,7 +8,7 @@ import directoryTree from "directory-tree";
 export  const projectCreateService=async ()=>{
      const projectId=randomUUID();
          
-        console.log(projectId);
+      
 
     await fs.mkdir(`./projects/${projectId}`);
     await execPromisified(REACT_PROJECT_COMMAND,{
