@@ -11,7 +11,7 @@ import apiRouter from './routes/index';
 import { handleEditorSocketEvents } from "./scoketHandler/editorHandler";
 
 
-const PORT=process.env.PORT ||3000;
+const PORT=Number(process.env.PORT) ||3000;
 
 const server= createServer(app)
 const io=new Server(server,{
@@ -66,7 +66,6 @@ editorNameSpace.on("connection",(socket)=>{
 
 
 
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
-
