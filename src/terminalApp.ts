@@ -7,76 +7,47 @@ import { handleContainerCreate } from "./containers/handleContainerCreate";
 import { handleTerminalCreation } from "./containers/handleTerminalCreation";
 
 const app = express();
+const server = createServer(app);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-const server = createServer(app);
-
-const PORT = process.env.PORT || 4000;
-
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log("Working Directory:", process.cwd());
+server.listen(4000, () => {
+    console.log("Server is running on port 4000");
+    console.log(process.cwd());
 });
 
-/**
- * Terminal WebSocket Server
- */
 const webSocketForTerminal = new WebSocketServer({
-  server,
-  path: "/terminal",
+    server,
 });
 
 webSocketForTerminal.on(
-  "connection",
-  async (ws: WebSocket, req: IncomingMessage) => {
-    try {
-      console.log("WebSocket Connected");
-      console.log("REQ URL =", req.url);
+    "connection",
+    async (ws: WebSocket, req: IncomingMessage) => {
+        try {
+            const url = req.url;
+            if (!url) { ws.close(); return; }
 
-      if (!req.url) {
-        ws.close();
-        return;
-      }
+            const isTerminal = url.includes("/terminal");
+            if (!isTerminal) { ws.close(); return; }
 
-      const projectId = new URL(
-        `http://localhost${req.url}`
-      ).searchParams.get("projectId");
+            const projectId = url.split("=")[1];
+            if (!projectId) { ws.close(); return; }
 
-      if (!projectId) {
-        console.log("Project ID missing");
-        ws.close();
-        return;
-      }
+            console.log("Project id received after connection", projectId);
 
-      console.log("Project ID:", projectId);
+            const result = await handleContainerCreate(projectId);
+            if (!result) { ws.close(); return; }
 
-      const result = await handleContainerCreate(projectId);
+            const { container, port } = result;
 
-      if (!result) {
-        console.log("Container creation failed");
-        ws.close();
-        return;
-      }
+            ws.send(JSON.stringify({ event: "getPortSuccess", port }));
 
-      const { container, port } = result;
-
-      console.log("Container Created");
-      console.log("Port:", port);
-
-      ws.send(
-        JSON.stringify({
-          event: "getPortSuccess",
-          port,
-        })
-      );
-
-      await handleTerminalCreation(container, ws);
-    } catch (error) {
-      console.error("Terminal WebSocket Error:", error);
-      ws.close();
+            handleTerminalCreation(container, ws);
+        } catch (error) {
+            console.error("WebSocket error:", error);
+            ws.close();
+        }
     }
-  }
 );
