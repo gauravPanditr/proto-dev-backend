@@ -5,7 +5,7 @@ import agentchat from "./agent.routes"
 
 const router = express.Router();
 
-router.use('/ping', pingCheck);
+router.get('/ping', pingCheck);
 router.use('/projects',projectRouter)
 router.use('/agent',agentchat)
 export default router;
