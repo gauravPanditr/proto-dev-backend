@@ -1,21 +1,34 @@
 FROM ubuntu:20.04
-# Setup user
-RUN useradd -ms /bin/bash sandbox 
 
-# Setup working directory
-WORKDIR /home/sandbox
+# Create sandbox user
+RUN useradd -ms /bin/bash sandbox
 
-# update the ubuntu machine
-RUN apt update && apt upgrade -y
+# Update packages
+RUN apt-get update && apt-get upgrade -y
 
-# Install nano and curl
-RUN apt install nano curl -y 
+# Install tools
+RUN apt-get install -y \
+    nano \
+    curl \
+    git \
+    ca-certificates
 
-# Install nodejs
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
+# Install Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
-# configuring terminal to display current working directory
+# Create application directory and give ownership
+RUN mkdir -p /home/sandbox/app \
+    && chown -R sandbox:sandbox /home/sandbox
+
+# Configure prompt to show current directory
 RUN echo "PS1='\w '" >> /home/sandbox/.bashrc
 
-# Setup final working directory
+# Run as sandbox user
+USER sandbox
+
+# Default working directory
 WORKDIR /home/sandbox/app
+
+# Keep terminal interactive
+CMD ["/bin/bash"]
