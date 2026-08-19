@@ -5,10 +5,13 @@ import { DOMAIN, PROJECTS_HOST_ROOT } from "../config/serverConfig";
 const docker = new Docker();
 
 
+
 const TRAEFIK_NETWORK = "protodev";
 
 
-
+// ============================================================
+// LIST CONTAINERS
+// ============================================================
 
 export const listContainer = async (): Promise<void> => {
     try {
@@ -29,6 +32,7 @@ export const listContainer = async (): Promise<void> => {
                 containerInfo.Ports
             );
         });
+
     } catch (error) {
         console.error(
             "Error listing containers:",
@@ -38,11 +42,18 @@ export const listContainer = async (): Promise<void> => {
 };
 
 
-
+// ============================================================
+// CREATE SANDBOX CONTAINER
+// ============================================================
 
 export const handleContainerCreate = async (
     projectId: string
-): Promise<Docker.Container | undefined> => {
+): Promise<
+    {
+        container: Docker.Container;
+        port: string|undefined;
+    } | undefined
+> => {
 
     console.log(
         "Project id received for container create:",
@@ -51,23 +62,29 @@ export const handleContainerCreate = async (
 
     try {
 
-        
+        // =====================================================
+        // 1. FIND EXISTING CONTAINER
+        // =====================================================
 
         const existingContainers =
             await docker.listContainers({
                 all: true,
+
                 filters: {
                     name: [projectId],
                 },
             });
+
 
         console.log(
             "Existing containers:",
             existingContainers
         );
 
+
         const existingContainer =
             existingContainers.at(0);
+
 
         if (existingContainer) {
 
@@ -75,14 +92,17 @@ export const handleContainerCreate = async (
                 "Container already exists, removing it..."
             );
 
+
             const oldContainer =
                 docker.getContainer(
                     existingContainer.Id
                 );
 
+
             await oldContainer.remove({
                 force: true,
             });
+
 
             console.log(
                 "Old container removed"
@@ -90,11 +110,16 @@ export const handleContainerCreate = async (
         }
 
 
+        // =====================================================
+        // 2. PROJECT PATH
+        // =====================================================
 
-        const hostProjectPath = path.join(
-            PROJECTS_HOST_ROOT,
-            projectId
-        );
+        const hostProjectPath =
+            path.join(
+                PROJECTS_HOST_ROOT,
+                projectId
+            );
+
 
         console.log(
             "Linux host project path:",
@@ -102,9 +127,13 @@ export const handleContainerCreate = async (
         );
 
 
+        // =====================================================
+        // 3. PREVIEW DOMAIN
+        // =====================================================
 
         const previewHost =
             `${projectId}.${DOMAIN}`;
+
 
         console.log(
             "Preview hostname:",
@@ -112,88 +141,154 @@ export const handleContainerCreate = async (
         );
 
 
-       
+        // =====================================================
+        // 4. CREATE SANDBOX
+        // =====================================================
 
         console.log(
             "Creating sandbox container..."
         );
 
+
         const container =
             await docker.createContainer({
 
+                // -------------------------------------------------
+                // Image
+                // -------------------------------------------------
+
                 Image: "sandbox",
+
+
+                // -------------------------------------------------
+                // Container name
+                // -------------------------------------------------
 
                 name: projectId,
 
+
+                // -------------------------------------------------
+                // Terminal
+                // -------------------------------------------------
+
                 AttachStdin: true,
+
                 AttachStdout: true,
+
                 AttachStderr: true,
+
+                Tty: true,
 
                 Cmd: ["/bin/bash"],
 
-                Tty: true,
+
+                // -------------------------------------------------
+                // Sandbox user
+                // -------------------------------------------------
 
                 User: "sandbox",
 
 
-               
+                // -------------------------------------------------
+                // Application directory
+                // -------------------------------------------------
 
                 Volumes: {
+
                     "/home/sandbox/app": {},
+
                 },
 
 
-               
+                // -------------------------------------------------
+                // Vite port
+                // -------------------------------------------------
 
                 ExposedPorts: {
+
                     "5173/tcp": {},
+
                 },
 
 
-             
+                // -------------------------------------------------
+                // Environment
+                // -------------------------------------------------
+
                 Env: [
+
                     "HOST=0.0.0.0",
+
                     "CHOKIDAR_USEPOLLING=true",
+
                     "CHOKIDAR_INTERVAL=500",
+
                 ],
 
 
+                // =================================================
+                // TRAEFIK LABELS
+                // =================================================
 
                 Labels: {
 
+                    // Enable Traefik
                     "traefik.enable": "true",
 
+
+                    // Docker network
                     "traefik.docker.network":
                         TRAEFIK_NETWORK,
 
 
+                    // ---------------------------------------------
                     // Router
+                    // ---------------------------------------------
+
                     [`traefik.http.routers.${projectId}.rule`]:
                         `Host(\`${previewHost}\`)`,
+
 
                     [`traefik.http.routers.${projectId}.entrypoints`]:
                         "web",
 
 
+                    // ---------------------------------------------
                     // Service
+                    // ---------------------------------------------
+
                     [`traefik.http.services.${projectId}.loadbalancer.server.port`]:
                         "5173",
+
                 },
 
 
-               
+                // =================================================
+                // HOST CONFIG
+                // =================================================
 
                 HostConfig: {
 
+                    // ---------------------------------------------
                     // Bind project directory
+                    // ---------------------------------------------
+
                     Binds: [
+
                         `${hostProjectPath}:/home/sandbox/app`,
+
                     ],
 
-                    // Connect to Traefik network
+
+                    // ---------------------------------------------
+                    // Join Traefik network
+                    // ---------------------------------------------
+
                     NetworkMode:
                         TRAEFIK_NETWORK,
+
                 },
+
             });
 
 
@@ -203,8 +298,12 @@ export const handleContainerCreate = async (
         );
 
 
-      
+        // =====================================================
+        // 5. START CONTAINER
+        // =====================================================
+
         await container.start();
+
 
         console.log(
             "Sandbox container started:",
@@ -212,19 +311,25 @@ export const handleContainerCreate = async (
         );
 
 
+        // =====================================================
+        // 6. INSPECT
+        // =====================================================
 
         const info =
             await container.inspect();
+
 
         console.log(
             "Container name:",
             info.Name
         );
 
+
         console.log(
             "Container status:",
             info.State?.Status
         );
+
 
         console.log(
             "Container networks:",
@@ -234,7 +339,30 @@ export const handleContainerCreate = async (
         );
 
 
-        return container;
+        // =====================================================
+        // 7. RETURN
+        // =====================================================
+        //
+        // IMPORTANT:
+        //
+        // terminalApp.ts currently expects:
+        //
+        // result.container
+        // result.port
+        //
+        // Traefik does NOT use a random host port anymore.
+        //
+        // Therefore port is undefined.
+        //
+        // -----------------------------------------------------
+
+        return {
+
+            container,
+
+            port: undefined,
+
+        };
 
     } catch (error) {
 
@@ -248,24 +376,37 @@ export const handleContainerCreate = async (
 };
 
 
-
+// ============================================================
+// GET CONTAINER
+// ============================================================
 
 export const getContainer = async (
     containerName: string
-): Promise<Docker.Container | undefined> => {
+): Promise<
+    Docker.Container | undefined
+> => {
 
     try {
 
         const containers =
             await docker.listContainers({
+
                 all: true,
+
                 filters: {
-                    name: [containerName],
+
+                    name: [
+                        containerName,
+                    ],
+
                 },
+
             });
+
 
         const container =
             containers.at(0);
+
 
         if (!container) {
 
@@ -276,6 +417,7 @@ export const getContainer = async (
 
             return undefined;
         }
+
 
         return docker.getContainer(
             container.Id
@@ -293,7 +435,19 @@ export const getContainer = async (
 };
 
 
-
+// ============================================================
+// GET CONTAINER PORT
+// ============================================================
+//
+// Kept because your existing terminalApp.ts uses it.
+//
+// IMPORTANT:
+// New Traefik containers do NOT have a random host port.
+// Therefore this returns undefined.
+//
+// Do not use this for preview routing.
+// Traefik directly connects to sandbox:5173.
+// ============================================================
 
 export const getContainerPort = async (
     containerName: string
@@ -303,14 +457,23 @@ export const getContainerPort = async (
 
         const containers =
             await docker.listContainers({
+
                 all: true,
+
                 filters: {
-                    name: [containerName],
+
+                    name: [
+                        containerName,
+                    ],
+
                 },
+
             });
+
 
         const container =
             containers.at(0);
+
 
         if (!container) {
 
@@ -325,16 +488,23 @@ export const getContainerPort = async (
 
         const containerInfo =
             await docker
-                .getContainer(container.Id)
+                .getContainer(
+                    container.Id
+                )
                 .inspect();
 
 
         const portInfo =
-            containerInfo.NetworkSettings
-                ?.Ports?.["5173/tcp"];
+            containerInfo
+                .NetworkSettings
+                ?.Ports
+                ?.["5173/tcp"];
 
 
-        if (!portInfo || portInfo.length === 0) {
+        if (
+            !portInfo ||
+            portInfo.length === 0
+        ) {
 
             console.log(
                 "No host port mapping found for 5173"
