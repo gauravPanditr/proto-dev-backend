@@ -1,10 +1,14 @@
 import Docker from "dockerode";
+import path from "path";
+import { PROJECTS_HOST_ROOT } from "../config/serverConfig";
 
 const docker = new Docker();
 
 export const listContainer = async (): Promise<void> => {
     try {
-        const containers = await docker.listContainers();
+        const containers = await docker.listContainers({
+            all: true,
+        });
 
         console.log("Containers:", containers);
 
@@ -25,6 +29,7 @@ export const handleContainerCreate = async (
     );
 
     try {
+        // Find existing container
         const existingContainers = await docker.listContainers({
             all: true,
             filters: {
@@ -37,9 +42,7 @@ export const handleContainerCreate = async (
         const existingContainer = existingContainers.at(0);
 
         if (existingContainer) {
-            console.log(
-                "Container already exists, removing it..."
-            );
+            console.log("Container already exists, removing it...");
 
             const oldContainer = docker.getContainer(
                 existingContainer.Id
@@ -50,16 +53,37 @@ export const handleContainerCreate = async (
             });
         }
 
-        console.log("Creating new container...");
+        /*
+         * Linux host project path
+         *
+         * Example:
+         * /home/gaura/ProtoDev/projects/<projectId>
+         */
+        const hostProjectPath = path.join(
+            PROJECTS_HOST_ROOT,
+            projectId
+        );
+
+        console.log(
+            "Linux host project path:",
+            hostProjectPath
+        );
+
+        console.log("Creating sandbox container...");
 
         const container = await docker.createContainer({
             Image: "sandbox",
+
             AttachStdin: true,
             AttachStdout: true,
             AttachStderr: true,
+
             Cmd: ["/bin/bash"],
+
             name: projectId,
+
             Tty: true,
+
             User: "sandbox",
 
             Volumes: {
@@ -71,48 +95,63 @@ export const handleContainerCreate = async (
             },
 
             Env: [
-    "HOST=0.0.0.0",
-    "CHOKIDAR_USEPOLLING=true",
-    "CHOKIDAR_INTERVAL=500",
-],
+                "HOST=0.0.0.0",
+                "CHOKIDAR_USEPOLLING=true",
+                "CHOKIDAR_INTERVAL=500",
+            ],
 
             HostConfig: {
                 Binds: [
-                    `${process.cwd()}/projects/${projectId}:/home/sandbox/app`,
+                    `${hostProjectPath}:/home/sandbox/app`,
                 ],
 
                 PortBindings: {
                     "5173/tcp": [
                         {
-                            HostPort: "0", // Docker assigns a random free port
+                            HostPort: "0",
                         },
                     ],
                 },
             },
         });
 
-        console.log("Container created:", container.id);
+        console.log(
+            "Container created:",
+            container.id
+        );
 
-       await container.start();
-    console.log("Container started");
+        await container.start();
 
-    // ✅ Inspect AFTER start to get the real port
-    const info = await container.inspect();
-    const portInfo = info.NetworkSettings?.Ports?.["5173/tcp"];
+        console.log("Container started");
 
-    if (!portInfo || portInfo.length === 0) {
-        console.error("Port binding not found after start");
-        return undefined;
-    }
+        // Inspect after start
+        const info = await container.inspect();
 
-    const port = portInfo[0]?.HostPort;
-    
-    console.log("Container port:", port);
-if (!port) {
-    console.error("Host port is undefined");
-    return undefined;
-}
-    return { container, port }; 
+        const portInfo =
+            info.NetworkSettings?.Ports?.["5173/tcp"];
+
+        if (!portInfo || portInfo.length === 0) {
+            console.error(
+                "Port binding not found after start"
+            );
+
+            return undefined;
+        }
+
+        const port = portInfo[0]?.HostPort;
+
+        console.log("Container port:", port);
+
+        if (!port) {
+            console.error("Host port is undefined");
+            return undefined;
+        }
+
+        return {
+            container,
+            port,
+        };
+
     } catch (error) {
         console.error(
             "Error while creating container:",
@@ -154,6 +193,7 @@ export const getContainerPort = async (
         }
 
         return portInfo[0]?.HostPort;
+
     } catch (error) {
         console.error(
             "Error while getting container port:",
