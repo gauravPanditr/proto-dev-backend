@@ -229,38 +229,32 @@ export const handleContainerCreate = async (
                 // =================================================
                 // TRAEFIK LABELS
                 // =================================================
+Labels: {
+    // Enable Traefik
+    "traefik.enable": "true",
 
-                Labels: {
+    // Docker network
+    "traefik.docker.network": TRAEFIK_NETWORK,
 
-                    // Enable Traefik
-                    "traefik.enable": "true",
+    // Router
+    [`traefik.http.routers.${projectId}.rule`]:
+        `Host(\`${previewHost}\`)`,
 
+    [`traefik.http.routers.${projectId}.entrypoints`]:
+        "web",
 
-                    // Docker network
-                    "traefik.docker.network":
-                        TRAEFIK_NETWORK,
+    // Middleware
+    [`traefik.http.routers.${projectId}.middlewares`]:
+        `${projectId}-fixhost`,
 
+    // Service
+    [`traefik.http.services.${projectId}.loadbalancer.server.port`]:
+        "5173",
 
-                    // ---------------------------------------------
-                    // Router
-                    // ---------------------------------------------
-
-                    [`traefik.http.routers.${projectId}.rule`]:
-                        `Host(\`${previewHost}\`)`,
-
-
-                    [`traefik.http.routers.${projectId}.entrypoints`]:
-                        "web",
-
-
-                    // ---------------------------------------------
-                    // Service
-                    // ---------------------------------------------
-
-                    [`traefik.http.services.${projectId}.loadbalancer.server.port`]:
-                        "5173",
-
-                },
+    // Rewrite Host before sending request to Vite
+    [`traefik.http.middlewares.${projectId}-fixhost.headers.customrequestheaders.Host`]:
+        "localhost",
+},
 
 
                 // =================================================
@@ -435,19 +429,6 @@ export const getContainer = async (
 };
 
 
-// ============================================================
-// GET CONTAINER PORT
-// ============================================================
-//
-// Kept because your existing terminalApp.ts uses it.
-//
-// IMPORTANT:
-// New Traefik containers do NOT have a random host port.
-// Therefore this returns undefined.
-//
-// Do not use this for preview routing.
-// Traefik directly connects to sandbox:5173.
-// ============================================================
 
 export const getContainerPort = async (
     containerName: string
