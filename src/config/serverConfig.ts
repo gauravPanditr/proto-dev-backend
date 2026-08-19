@@ -17,3 +17,4 @@ export const PORT = process.env.PORT || 3000;
 
 export const REACT_PROJECT_COMMAND =
     process.env.REACT_PROJECT_COMMAND;
+export const DOMAIN = process.env.DOMAIN;

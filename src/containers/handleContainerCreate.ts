@@ -1,8 +1,14 @@
 import Docker from "dockerode";
 import path from "path";
-import { PROJECTS_HOST_ROOT } from "../config/serverConfig";
+import { DOMAIN, PROJECTS_HOST_ROOT } from "../config/serverConfig";
 
 const docker = new Docker();
+
+
+const TRAEFIK_NETWORK = "protodev";
+
+
+
 
 export const listContainer = async (): Promise<void> => {
     try {
@@ -13,52 +19,78 @@ export const listContainer = async (): Promise<void> => {
         console.log("Containers:", containers);
 
         containers.forEach((containerInfo) => {
-            console.log("Ports:", containerInfo.Ports);
+            console.log(
+                "Container:",
+                containerInfo.Names
+            );
+
+            console.log(
+                "Ports:",
+                containerInfo.Ports
+            );
         });
     } catch (error) {
-        console.error("Error listing containers:", error);
+        console.error(
+            "Error listing containers:",
+            error
+        );
     }
 };
 
+
+
+
 export const handleContainerCreate = async (
     projectId: string
-): Promise<{ container: Docker.Container; port: string } | undefined> => {
+): Promise<Docker.Container | undefined> => {
+
     console.log(
         "Project id received for container create:",
         projectId
     );
 
     try {
-        // Find existing container
-        const existingContainers = await docker.listContainers({
-            all: true,
-            filters: {
-                name: [projectId],
-            },
-        });
 
-        console.log("Existing containers:", existingContainers);
+        
 
-        const existingContainer = existingContainers.at(0);
+        const existingContainers =
+            await docker.listContainers({
+                all: true,
+                filters: {
+                    name: [projectId],
+                },
+            });
+
+        console.log(
+            "Existing containers:",
+            existingContainers
+        );
+
+        const existingContainer =
+            existingContainers.at(0);
 
         if (existingContainer) {
-            console.log("Container already exists, removing it...");
 
-            const oldContainer = docker.getContainer(
-                existingContainer.Id
+            console.log(
+                "Container already exists, removing it..."
             );
+
+            const oldContainer =
+                docker.getContainer(
+                    existingContainer.Id
+                );
 
             await oldContainer.remove({
                 force: true,
             });
+
+            console.log(
+                "Old container removed"
+            );
         }
 
-        /*
-         * Linux host project path
-         *
-         * Example:
-         * /home/gaura/ProtoDev/projects/<projectId>
-         */
+
+
         const hostProjectPath = path.join(
             PROJECTS_HOST_ROOT,
             projectId
@@ -69,92 +101,145 @@ export const handleContainerCreate = async (
             hostProjectPath
         );
 
-        console.log("Creating sandbox container...");
 
-        const container = await docker.createContainer({
-            Image: "sandbox",
 
-            AttachStdin: true,
-            AttachStdout: true,
-            AttachStderr: true,
+        const previewHost =
+            `${projectId}.${DOMAIN}`;
 
-            Cmd: ["/bin/bash"],
+        console.log(
+            "Preview hostname:",
+            previewHost
+        );
 
-            name: projectId,
 
-            Tty: true,
+       
 
-            User: "sandbox",
+        console.log(
+            "Creating sandbox container..."
+        );
 
-            Volumes: {
-                "/home/sandbox/app": {},
-            },
+        const container =
+            await docker.createContainer({
 
-            ExposedPorts: {
-                "5173/tcp": {},
-            },
+                Image: "sandbox",
 
-            Env: [
-                "HOST=0.0.0.0",
-                "CHOKIDAR_USEPOLLING=true",
-                "CHOKIDAR_INTERVAL=500",
-            ],
+                name: projectId,
 
-            HostConfig: {
-                Binds: [
-                    `${hostProjectPath}:/home/sandbox/app`,
+                AttachStdin: true,
+                AttachStdout: true,
+                AttachStderr: true,
+
+                Cmd: ["/bin/bash"],
+
+                Tty: true,
+
+                User: "sandbox",
+
+
+               
+
+                Volumes: {
+                    "/home/sandbox/app": {},
+                },
+
+
+               
+
+                ExposedPorts: {
+                    "5173/tcp": {},
+                },
+
+
+             
+                Env: [
+                    "HOST=0.0.0.0",
+                    "CHOKIDAR_USEPOLLING=true",
+                    "CHOKIDAR_INTERVAL=500",
                 ],
 
-                PortBindings: {
-                    "5173/tcp": [
-                        {
-                            HostPort: "0",
-                        },
-                    ],
+
+
+                Labels: {
+
+                    "traefik.enable": "true",
+
+                    "traefik.docker.network":
+                        TRAEFIK_NETWORK,
+
+
+                    // Router
+                    [`traefik.http.routers.${projectId}.rule`]:
+                        `Host(\`${previewHost}\`)`,
+
+                    [`traefik.http.routers.${projectId}.entrypoints`]:
+                        "web",
+
+
+                    // Service
+                    [`traefik.http.services.${projectId}.loadbalancer.server.port`]:
+                        "5173",
                 },
-            },
-        });
+
+
+               
+
+                HostConfig: {
+
+                    // Bind project directory
+                    Binds: [
+                        `${hostProjectPath}:/home/sandbox/app`,
+                    ],
+
+                    // Connect to Traefik network
+                    NetworkMode:
+                        TRAEFIK_NETWORK,
+                },
+            });
+
 
         console.log(
             "Container created:",
             container.id
         );
 
+
+      
         await container.start();
 
-        console.log("Container started");
+        console.log(
+            "Sandbox container started:",
+            projectId
+        );
 
-        // Inspect after start
-        const info = await container.inspect();
 
-        const portInfo =
-            info.NetworkSettings?.Ports?.["5173/tcp"];
 
-        if (!portInfo || portInfo.length === 0) {
-            console.error(
-                "Port binding not found after start"
-            );
+        const info =
+            await container.inspect();
 
-            return undefined;
-        }
+        console.log(
+            "Container name:",
+            info.Name
+        );
 
-        const port = portInfo[0]?.HostPort;
+        console.log(
+            "Container status:",
+            info.State?.Status
+        );
 
-        console.log("Container port:", port);
+        console.log(
+            "Container networks:",
+            Object.keys(
+                info.NetworkSettings?.Networks || {}
+            )
+        );
 
-        if (!port) {
-            console.error("Host port is undefined");
-            return undefined;
-        }
 
-        return {
-            container,
-            port,
-        };
+        return container;
 
     } catch (error) {
+
         console.error(
-            "Error while creating container:",
+            "Error while creating sandbox container:",
             error
         );
 
@@ -162,39 +247,107 @@ export const handleContainerCreate = async (
     }
 };
 
+
+
+
+export const getContainer = async (
+    containerName: string
+): Promise<Docker.Container | undefined> => {
+
+    try {
+
+        const containers =
+            await docker.listContainers({
+                all: true,
+                filters: {
+                    name: [containerName],
+                },
+            });
+
+        const container =
+            containers.at(0);
+
+        if (!container) {
+
+            console.log(
+                "Container not found:",
+                containerName
+            );
+
+            return undefined;
+        }
+
+        return docker.getContainer(
+            container.Id
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Error getting container:",
+            error
+        );
+
+        return undefined;
+    }
+};
+
+
+
+
 export const getContainerPort = async (
     containerName: string
 ): Promise<string | undefined> => {
-    try {
-        const containers = await docker.listContainers({
-            all: true,
-            filters: {
-                name: [containerName],
-            },
-        });
 
-        const container = containers.at(0);
+    try {
+
+        const containers =
+            await docker.listContainers({
+                all: true,
+                filters: {
+                    name: [containerName],
+                },
+            });
+
+        const container =
+            containers.at(0);
 
         if (!container) {
-            console.log("Container not found");
+
+            console.log(
+                "Container not found:",
+                containerName
+            );
+
             return undefined;
         }
 
-        const containerInfo = await docker
-            .getContainer(container.Id)
-            .inspect();
+
+        const containerInfo =
+            await docker
+                .getContainer(container.Id)
+                .inspect();
+
 
         const portInfo =
-            containerInfo.NetworkSettings?.Ports?.["5173/tcp"];
+            containerInfo.NetworkSettings
+                ?.Ports?.["5173/tcp"];
+
 
         if (!portInfo || portInfo.length === 0) {
-            console.log("Port mapping not found");
+
+            console.log(
+                "No host port mapping found for 5173"
+            );
+
             return undefined;
         }
+
 
         return portInfo[0]?.HostPort;
 
     } catch (error) {
+
         console.error(
             "Error while getting container port:",
             error
